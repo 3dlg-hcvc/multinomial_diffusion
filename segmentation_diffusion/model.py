@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 from diffusion_utils.diffusion_multinomial import MultinomialDiffusion
 from .layers.layers import SegmentationUnet
+# from .layers.layers_voxel import SegmentationUnet
 
 
 def add_model_args(parser):
