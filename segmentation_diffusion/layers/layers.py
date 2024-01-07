@@ -181,7 +181,7 @@ class SegmentationUnet(nn.Module):
             nn.Conv2d(dim, out_dim, 1)
         )
 
-    def forward(self, time, x):
+    def forward(self, time, x, floor_plan=None):
         x_shape = x.size()[1:]
         if len(x.size()) == 3:
             x = x.unsqueeze(1)
