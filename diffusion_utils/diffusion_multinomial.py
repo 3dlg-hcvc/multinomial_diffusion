@@ -217,8 +217,8 @@ class MultinomialDiffusion(torch.nn.Module):
         return log_model_pred
 
     @torch.no_grad()
-    def p_sample(self, log_x, t):
-        model_log_prob = self.p_pred(log_x=log_x, t=t)
+    def p_sample(self, log_x, t, floor_plan=None):
+        model_log_prob = self.p_pred(log_x=log_x, t=t, floor_plan=floor_plan)
         out = self.log_sample_categorical(model_log_prob)
         return out
 
@@ -408,7 +408,7 @@ class MultinomialDiffusion(torch.nn.Module):
         print()
         return log_onehot_to_index(log_z)
 
-    def sample_chain(self, num_samples):
+    def sample_chain(self, num_samples, floor_plan=None):
         b = num_samples
         device = self.log_alpha.device
         uniform_logits = torch.zeros(
@@ -420,7 +420,10 @@ class MultinomialDiffusion(torch.nn.Module):
         for i in reversed(range(0, self.num_timesteps)):
             print(f'Chain timestep {i:4d}', end='\r')
             t = torch.full((b,), i, device=device, dtype=torch.long)
-            log_z = self.p_sample(log_z, t)
+            if floor_plan is not None:
+                log_z = self.p_sample(log_z, t, floor_plan)
+            else:
+                log_z = self.p_sample(log_z, t)
 
             zs[i] = log_onehot_to_index(log_z)
         print()
