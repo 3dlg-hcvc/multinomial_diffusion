@@ -157,10 +157,13 @@ class MultinomialDiffusion(torch.nn.Module):
 
         return log_probs
 
-    def predict_start(self, log_x_t, t):
+    def predict_start(self, log_x_t, t, floor_plan=None):
         x_t = log_onehot_to_index(log_x_t)
 
-        out = self._denoise_fn(t, x_t)
+        if floor_plan is not None:
+            out = self._denoise_fn(t, x_t, floor_plan)
+        else:
+            out = self._denoise_fn(t, x_t)
 
         assert out.size(0) == x_t.size(0)
         assert out.size(1) == self.num_classes
@@ -192,15 +195,25 @@ class MultinomialDiffusion(torch.nn.Module):
 
         return log_EV_xtmin_given_xt_given_xstart
 
-    def p_pred(self, log_x, t):
-        if self.parametrization == 'x0':
-            log_x_recon = self.predict_start(log_x, t=t)
-            log_model_pred = self.q_posterior(
-                log_x_start=log_x_recon, log_x_t=log_x, t=t)
-        elif self.parametrization == 'direct':
-            log_model_pred = self.predict_start(log_x, t=t)
+    def p_pred(self, log_x, t, floor_plan=None):
+        if floor_plan is not None:
+            if self.parametrization == 'x0':
+                log_x_recon = self.predict_start(log_x, t=t, floor_plan=floor_plan)
+                log_model_pred = self.q_posterior(
+                    log_x_start=log_x_recon, log_x_t=log_x, t=t)
+            elif self.parametrization == 'direct':
+                log_model_pred = self.predict_start(log_x, t=t, floor_plan=floor_plan)
+            else:
+                raise ValueError
         else:
-            raise ValueError
+            if self.parametrization == 'x0':
+                log_x_recon = self.predict_start(log_x, t=t)
+                log_model_pred = self.q_posterior(
+                    log_x_start=log_x_recon, log_x_t=log_x, t=t)
+            elif self.parametrization == 'direct':
+                log_model_pred = self.predict_start(log_x, t=t)
+            else:
+                raise ValueError
         return log_model_pred
 
     @torch.no_grad()
@@ -284,11 +297,14 @@ class MultinomialDiffusion(torch.nn.Module):
         kl_prior = self.multinomial_kl(log_qxT_prob, log_half_prob)
         return sum_except_batch(kl_prior)
 
-    def compute_Lt(self, log_x_start, log_x_t, t, detach_mean=False):
+    def compute_Lt(self, log_x_start, log_x_t, t, floor_plan, detach_mean=False):
         log_true_prob = self.q_posterior(
             log_x_start=log_x_start, log_x_t=log_x_t, t=t)
 
-        log_model_prob = self.p_pred(log_x=log_x_t, t=t)
+        if floor_plan is not None:
+            log_model_prob = self.p_pred(log_x=log_x_t, t=t, floor_plan=floor_plan)
+        else:
+            log_model_prob = self.p_pred(log_x=log_x_t, t=t)
 
         if detach_mean:
             log_model_prob = log_model_prob.detach()
@@ -327,7 +343,7 @@ class MultinomialDiffusion(torch.nn.Module):
         else:
             raise ValueError
 
-    def _train_loss(self, x):
+    def _train_loss(self, x, floor_plan):
         b, device = x.size(0), x.device
 
         if self.loss_type == 'vb_stochastic':
@@ -338,7 +354,7 @@ class MultinomialDiffusion(torch.nn.Module):
             log_x_start = index_to_log_onehot(x_start, self.num_classes)
 
             kl = self.compute_Lt(
-                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t)
+                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t, floor_plan)
 
             Lt2 = kl.pow(2)
             Lt2_prev = self.Lt_history.gather(dim=0, index=t)
@@ -359,10 +375,10 @@ class MultinomialDiffusion(torch.nn.Module):
         else:
             raise ValueError()
 
-    def log_prob(self, x):
+    def log_prob(self, x, floor_plan=None):
         b, device = x.size(0), x.device
         if self.training:
-            return self._train_loss(x)
+            return self._train_loss(x, floor_plan)
 
         else:
             log_x_start = index_to_log_onehot(x, self.num_classes)
@@ -370,7 +386,7 @@ class MultinomialDiffusion(torch.nn.Module):
             t, pt = self.sample_time(b, device, 'importance')
 
             kl = self.compute_Lt(
-                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t)
+                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t, floor_plan=floor_plan)
 
             kl_prior = self.kl_prior(log_x_start)
 

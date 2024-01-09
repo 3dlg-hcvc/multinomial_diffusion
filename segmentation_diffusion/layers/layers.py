@@ -7,8 +7,6 @@ from einops import rearrange
 from inspect import isfunction
 
 
-
-
 def exists(x):
     return x is not None
 
@@ -50,6 +48,7 @@ class Mish(nn.Module):
     def forward(self, x):
         return x * torch.tanh(F.softplus(x))
 
+
 class Upsample(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -58,6 +57,7 @@ class Upsample(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
 class Downsample(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -65,6 +65,7 @@ class Downsample(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
+
 
 class Rezero(nn.Module):
     def __init__(self, fn):
@@ -75,21 +76,24 @@ class Rezero(nn.Module):
     def forward(self, x):
         return self.fn(x) * self.g
 
+
 # building block modules
 
 class Block(nn.Module):
-    def __init__(self, dim, dim_out, groups = 8):
+    def __init__(self, dim, dim_out, groups=8):
         super().__init__()
         self.block = nn.Sequential(
             nn.Conv2d(dim, dim_out, 3, padding=1),
             nn.GroupNorm(groups, dim_out),
             Mish()
         )
+
     def forward(self, x):
         return self.block(x)
 
+
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, *, time_emb_dim, groups = 8):
+    def __init__(self, dim, dim_out, *, time_emb_dim, groups=8):
         super().__init__()
         self.mlp = nn.Sequential(
             Mish(),
@@ -106,33 +110,36 @@ class ResnetBlock(nn.Module):
         h = self.block2(h)
         return h + self.res_conv(x)
 
+
 class LinearAttention(nn.Module):
-    def __init__(self, dim, heads = 4, dim_head = 32):
+    def __init__(self, dim, heads=4, dim_head=32):
         super().__init__()
         self.heads = heads
         hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias = False)
+        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias=False)
         self.to_out = nn.Conv2d(hidden_dim, dim, 1)
 
     def forward(self, x):
         b, c, h, w = x.shape
         qkv = self.to_qkv(x)
-        q, k, v = rearrange(qkv, 'b (qkv heads c) h w -> qkv b heads c (h w)', heads = self.heads, qkv=3)
+        q, k, v = rearrange(qkv, 'b (qkv heads c) h w -> qkv b heads c (h w)', heads=self.heads, qkv=3)
         k = k.softmax(dim=-1)
         context = torch.einsum('bhdn,bhen->bhde', k, v)
         out = torch.einsum('bhde,bhdn->bhen', context, q)
         out = rearrange(out, 'b heads c (h w) -> b (heads c) h w', heads=self.heads, h=h, w=w)
         return self.to_out(out)
 
+
 # model
 
 class SegmentationUnet(nn.Module):
-    def __init__(self, num_classes, dim, num_steps, dim_mults=(1, 2, 4, 8), groups = 8, dropout=0.):
+    def __init__(self, num_classes, dim, num_steps, dim_mults=(1, 2, 4, 8), groups=8, dropout=0.):
         super().__init__()
         dims = [dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
 
         self.embedding = nn.Embedding(num_classes, dim)
+        self.floorplan_embedding = nn.Embedding(2, dim)
         self.dim = dim
         self.num_classes = num_classes
 
@@ -153,23 +160,23 @@ class SegmentationUnet(nn.Module):
             is_last = ind >= (num_resolutions - 1)
 
             self.downs.append(nn.ModuleList([
-                ResnetBlock(dim_in, dim_out, time_emb_dim = dim),
-                ResnetBlock(dim_out, dim_out, time_emb_dim = dim),
+                ResnetBlock(dim_in, dim_out, time_emb_dim=dim),
+                ResnetBlock(dim_out, dim_out, time_emb_dim=dim),
                 Residual(Rezero(LinearAttention(dim_out))),
                 Downsample(dim_out) if not is_last else nn.Identity()
             ]))
 
         mid_dim = dims[-1]
-        self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim = dim)
+        self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=dim)
         self.mid_attn = Residual(Rezero(LinearAttention(mid_dim)))
-        self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim = dim)
+        self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=dim)
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out[1:])):
             is_last = ind >= (num_resolutions - 1)
 
             self.ups.append(nn.ModuleList([
-                ResnetBlock(dim_out * 2, dim_in, time_emb_dim = dim),
-                ResnetBlock(dim_in, dim_in, time_emb_dim = dim),
+                ResnetBlock(dim_out * 2, dim_in, time_emb_dim=dim),
+                ResnetBlock(dim_in, dim_in, time_emb_dim=dim),
                 Residual(Rezero(LinearAttention(dim_in))),
                 Upsample(dim_in) if not is_last else nn.Identity()
             ]))
@@ -188,6 +195,10 @@ class SegmentationUnet(nn.Module):
 
         B, C, H, W = x.size()
         x = self.embedding(x)
+
+        if floor_plan is not None:
+            floor_plan = self.floorplan_embedding(floor_plan)
+            x = x + floor_plan
 
         assert x.shape == (B, C, H, W, self.dim)
 

@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from diffusion_utils.diffusion_multinomial import MultinomialDiffusion
+from dependencies.multinomial_diffusion.diffusion_utils.diffusion_multinomial import MultinomialDiffusion
 from .layers.layers import SegmentationUnet
 # from .layers.layers_voxel import SegmentationUnet
 

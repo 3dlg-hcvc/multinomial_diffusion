@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="diffusion_utils",
-    version="0.1",
+    version="0.2",
     author="Emiel Hoogeboom, Didrik Nielsen",
     author_email="",
     description="Experiments in PyTorch",
