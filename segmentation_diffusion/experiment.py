@@ -21,8 +21,9 @@ class Experiment(DiffusionExperiment):
         loss_count = 0
         for data in self.train_loader:
             x, floor_plan = data
+            floor_plan = floor_plan.to(self.args.device) if torch.sum(floor_plan) != 0 else None
             self.optimizer.zero_grad()
-            loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan.to(self.args.device))
+            loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan)
             loss.backward()
             if self.args.clip_value: torch.nn.utils.clip_grad_value_(self.model.parameters(), self.args.clip_value)
             if self.args.clip_norm: torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_norm)
@@ -43,7 +44,8 @@ class Experiment(DiffusionExperiment):
             loss_count = 0
             for data in self.train_loader:
                 x, floor_plan = data
-                loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan.to(self.args.device))
+                floor_plan = floor_plan.to(self.args.device) if torch.sum(floor_plan) != 0 else None
+                loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan)
                 loss_sum += loss.detach().cpu().item() * len(x)
                 loss_count += len(x)
                 print('Train evaluating. Epoch: {}/{}, Datapoint: {}/{}, Bits/dim: {:.3f}'.format(epoch+1, self.args.epochs, loss_count, len(self.train_loader.dataset), loss_sum/loss_count), end='\r')
@@ -54,7 +56,8 @@ class Experiment(DiffusionExperiment):
             loss_count = 0
             for data in self.train_loader:
                 x, floor_plan = data
-                loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan.to(self.args.device))
+                floor_plan = floor_plan.to(self.args.device) if torch.sum(floor_plan) != 0 else None
+                loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan)
                 loss_sum += loss.detach().cpu().item() * len(x)
                 loss_count += len(x)
                 print('     Evaluating. Epoch: {}/{}, Datapoint: {}/{}, Bits/dim: {:.3f}'.format(epoch+1, self.args.epochs, loss_count, len(self.eval_loader.dataset), loss_sum/loss_count), end='\r')
