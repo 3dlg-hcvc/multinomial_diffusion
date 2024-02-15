@@ -3,7 +3,6 @@ import torch.nn.functional as F
 import numpy as np
 from inspect import isfunction
 
-
 """
 Based in part on: https://github.com/lucidrains/denoising-diffusion-pytorch/blob/5989f4c77eafcdc6be0fb4739f0f277a6dd7f7d8/denoising_diffusion_pytorch/denoising_diffusion_pytorch.py#L281
 """
@@ -71,7 +70,7 @@ def log_onehot_to_index(log_x):
     return log_x.argmax(1)
 
 
-def cosine_beta_schedule(timesteps, s = 0.008):
+def cosine_beta_schedule(timesteps, s=0.008):
     """
     cosine schedule
     as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
@@ -157,13 +156,10 @@ class MultinomialDiffusion(torch.nn.Module):
 
         return log_probs
 
-    def predict_start(self, log_x_t, t, floor_plan=None):
+    def predict_start(self, log_x_t, t, floor_plan, room_type):
         x_t = log_onehot_to_index(log_x_t)
 
-        if floor_plan is not None:
-            out = self._denoise_fn(t, x_t, floor_plan)
-        else:
-            out = self._denoise_fn(t, x_t)
+        out = self._denoise_fn(t, x_t, floor_plan, room_type)
 
         assert out.size(0) == x_t.size(0)
         assert out.size(1) == self.num_classes
@@ -184,7 +180,6 @@ class MultinomialDiffusion(torch.nn.Module):
         t_broadcast = t.view(-1, *num_axes) * torch.ones_like(log_x_start)
         log_EV_qxtmin_x0 = torch.where(t_broadcast == 0, log_x_start, log_EV_qxtmin_x0)
 
-
         # Note: _NOT_ x_tmin1, which is how the formula is typically used!!!
         # Not very easy to see why this is true. But it is :)
         unnormed_logprobs = log_EV_qxtmin_x0 + self.q_pred_one_timestep(log_x_t, t)
@@ -195,30 +190,21 @@ class MultinomialDiffusion(torch.nn.Module):
 
         return log_EV_xtmin_given_xt_given_xstart
 
-    def p_pred(self, log_x, t, floor_plan=None):
-        if floor_plan is not None:
-            if self.parametrization == 'x0':
-                log_x_recon = self.predict_start(log_x, t=t, floor_plan=floor_plan)
-                log_model_pred = self.q_posterior(
-                    log_x_start=log_x_recon, log_x_t=log_x, t=t)
-            elif self.parametrization == 'direct':
-                log_model_pred = self.predict_start(log_x, t=t, floor_plan=floor_plan)
-            else:
-                raise ValueError
+    def p_pred(self, log_x, t, floor_plan, room_type):
+        if self.parametrization == 'x0':
+            log_x_recon = self.predict_start(log_x, t=t, floor_plan=floor_plan, room_type=room_type)
+            log_model_pred = self.q_posterior(
+                log_x_start=log_x_recon, log_x_t=log_x, t=t)
+        elif self.parametrization == 'direct':
+            log_model_pred = self.predict_start(log_x, t=t, floor_plan=floor_plan, room_type=room_type)
         else:
-            if self.parametrization == 'x0':
-                log_x_recon = self.predict_start(log_x, t=t)
-                log_model_pred = self.q_posterior(
-                    log_x_start=log_x_recon, log_x_t=log_x, t=t)
-            elif self.parametrization == 'direct':
-                log_model_pred = self.predict_start(log_x, t=t)
-            else:
-                raise ValueError
+            raise ValueError
+
         return log_model_pred
 
     @torch.no_grad()
-    def p_sample(self, log_x, t, floor_plan=None):
-        model_log_prob = self.p_pred(log_x=log_x, t=t, floor_plan=floor_plan)
+    def p_sample(self, log_x, t, floor_plan, room_type):
+        model_log_prob = self.p_pred(log_x=log_x, t=t, floor_plan=floor_plan, room_type=room_type)
         out = self.log_sample_categorical(model_log_prob)
         return out
 
@@ -235,11 +221,11 @@ class MultinomialDiffusion(torch.nn.Module):
         return img
 
     @torch.no_grad()
-    def _sample(self, image_size, batch_size = 16):
+    def _sample(self, image_size, batch_size=16):
         return self.p_sample_loop((batch_size, 3, image_size, image_size))
 
     @torch.no_grad()
-    def interpolate(self, x1, x2, t = None, lam = 0.5):
+    def interpolate(self, x1, x2, t=None, lam=0.5):
         b, *_, device = *x1.shape, x1.device
         t = default(t, self.num_timesteps - 1)
 
@@ -297,14 +283,11 @@ class MultinomialDiffusion(torch.nn.Module):
         kl_prior = self.multinomial_kl(log_qxT_prob, log_half_prob)
         return sum_except_batch(kl_prior)
 
-    def compute_Lt(self, log_x_start, log_x_t, t, floor_plan, detach_mean=False):
+    def compute_Lt(self, log_x_start, log_x_t, t, floor_plan, room_type, detach_mean=False):
         log_true_prob = self.q_posterior(
             log_x_start=log_x_start, log_x_t=log_x_t, t=t)
 
-        if floor_plan is not None:
-            log_model_prob = self.p_pred(log_x=log_x_t, t=t, floor_plan=floor_plan)
-        else:
-            log_model_prob = self.p_pred(log_x=log_x_t, t=t)
+        log_model_prob = self.p_pred(log_x=log_x_t, t=t, floor_plan=floor_plan, room_type=room_type)
 
         if detach_mean:
             log_model_prob = log_model_prob.detach()
@@ -343,7 +326,7 @@ class MultinomialDiffusion(torch.nn.Module):
         else:
             raise ValueError
 
-    def _train_loss(self, x, floor_plan):
+    def _train_loss(self, x, floor_plan, room_type):
         b, device = x.size(0), x.device
 
         if self.loss_type == 'vb_stochastic':
@@ -354,7 +337,7 @@ class MultinomialDiffusion(torch.nn.Module):
             log_x_start = index_to_log_onehot(x_start, self.num_classes)
 
             kl = self.compute_Lt(
-                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t, floor_plan)
+                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t, floor_plan, room_type)
 
             Lt2 = kl.pow(2)
             Lt2_prev = self.Lt_history.gather(dim=0, index=t)
@@ -375,10 +358,10 @@ class MultinomialDiffusion(torch.nn.Module):
         else:
             raise ValueError()
 
-    def log_prob(self, x, floor_plan=None):
+    def log_prob(self, x, floor_plan=None, room_type=None):
         b, device = x.size(0), x.device
         if self.training:
-            return self._train_loss(x, floor_plan)
+            return self._train_loss(x, floor_plan, room_type)
 
         else:
             log_x_start = index_to_log_onehot(x, self.num_classes)
@@ -386,7 +369,7 @@ class MultinomialDiffusion(torch.nn.Module):
             t, pt = self.sample_time(b, device, 'importance')
 
             kl = self.compute_Lt(
-                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t, floor_plan=floor_plan)
+                log_x_start, self.q_sample(log_x_start=log_x_start, t=t), t, floor_plan=floor_plan, room_type=room_type)
 
             kl_prior = self.kl_prior(log_x_start)
 
@@ -408,7 +391,7 @@ class MultinomialDiffusion(torch.nn.Module):
         print()
         return log_onehot_to_index(log_z)
 
-    def sample_chain(self, num_samples, floor_plan=None):
+    def sample_chain(self, num_samples, floor_plan=None, room_type=None):
         b = num_samples
         device = self.log_alpha.device
         uniform_logits = torch.zeros(

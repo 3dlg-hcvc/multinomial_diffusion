@@ -7,9 +7,9 @@ def loglik_nats(model, x):
     return - model.log_prob(x).mean()
 
 
-def loglik_bpd(model, x, floor_plan):
+def loglik_bpd(model, x, floor_plan, room_type):
     """Compute the log-likelihood in bits per dim."""
-    return - model.log_prob(x, floor_plan=floor_plan).sum() / (math.log(2) * x.shape.numel())
+    return - model.log_prob(x, floor_plan=floor_plan, room_type=room_type).sum() / (math.log(2) * x.shape.numel())
 
 
 def elbo_nats(model, x):
@@ -20,12 +20,12 @@ def elbo_nats(model, x):
     return loglik_nats(model, x)
 
 
-def elbo_bpd(model, x, floor_plan):
+def elbo_bpd(model, x, floor_plan, room_type):
     """
     Compute the ELBO in bits per dim.
     Same as .loglik_bpd(), but may improve readability.
     """
-    return loglik_bpd(model, x, floor_plan)
+    return loglik_bpd(model, x, floor_plan, room_type)
 
 
 def iwbo(model, x, k):

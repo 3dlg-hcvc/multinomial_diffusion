@@ -140,6 +140,7 @@ class SegmentationUnet(nn.Module):
 
         self.embedding = nn.Embedding(num_classes, dim)
         self.floorplan_embedding = nn.Embedding(2, dim)
+        self.room_type_embedding = nn.Embedding(3, dim)
         self.dim = dim
         self.num_classes = num_classes
 
@@ -147,6 +148,11 @@ class SegmentationUnet(nn.Module):
 
         self.time_pos_emb = SinusoidalPosEmb(dim, num_steps=num_steps)
         self.mlp = nn.Sequential(
+            nn.Linear(dim, dim * 4),
+            Mish(),
+            nn.Linear(dim * 4, dim)
+        )
+        self.room_type_mlp = nn.Sequential(
             nn.Linear(dim, dim * 4),
             Mish(),
             nn.Linear(dim * 4, dim)
@@ -188,7 +194,7 @@ class SegmentationUnet(nn.Module):
             nn.Conv2d(dim, out_dim, 1)
         )
 
-    def forward(self, time, x, floor_plan=None):
+    def forward(self, time, x, floor_plan=None, room_type=None):
         x_shape = x.size()[1:]
         if len(x.size()) == 3:
             x = x.unsqueeze(1)
@@ -209,6 +215,11 @@ class SegmentationUnet(nn.Module):
         x = x.reshape(B, C * self.dim, H, W)
         t = self.time_pos_emb(time)
         t = self.mlp(t)
+        
+        if room_type is not None:
+            room_type = self.room_type_embedding(room_type)
+            room_type = self.room_type_mlp(room_type)
+            t += room_type
 
         h = []
 
