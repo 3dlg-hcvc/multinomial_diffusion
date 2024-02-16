@@ -403,10 +403,7 @@ class MultinomialDiffusion(torch.nn.Module):
         for i in reversed(range(0, self.num_timesteps)):
             print(f'Chain timestep {i:4d}', end='\r')
             t = torch.full((b,), i, device=device, dtype=torch.long)
-            if floor_plan is not None:
-                log_z = self.p_sample(log_z, t, floor_plan)
-            else:
-                log_z = self.p_sample(log_z, t)
+            log_z = self.p_sample(log_z, t, floor_plan, room_type)
 
             zs[i] = log_onehot_to_index(log_z)
         print()
