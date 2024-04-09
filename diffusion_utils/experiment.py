@@ -95,7 +95,7 @@ class DiffusionExperiment(BaseExperiment):
             self.writer = SummaryWriter(os.path.join(self.log_path, 'tb'))
             self.writer.add_text("args", get_args_table(args_dict).get_html_string(), global_step=0)
         if args.log_wandb:
-            wandb.init(config=args_dict, project=args.project, id=args.name, dir=self.log_path)
+            wandb.init(config=args_dict, project=args.project, id=args.name, dir=self.log_path, settings=wandb.Settings(start_method="fork"))
 
     def log_fn(self, epoch, train_dict, eval_dict):
 
