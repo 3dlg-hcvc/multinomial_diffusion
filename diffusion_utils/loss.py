@@ -30,7 +30,7 @@ def elbo_bpd(model, x, floor_plan, room_type):
 
 def floor_loss(model, x, floor_plan, room_type):
     """Compute the floor loss."""
-    return model.floor_loss(x, floor_plan, room_type).sum()
+    return model.floor_loss(x, floor_plan, room_type).sum() / x.shape[0]
 
 
 def iwbo(model, x, k):
