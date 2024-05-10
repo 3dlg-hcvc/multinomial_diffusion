@@ -28,6 +28,11 @@ def elbo_bpd(model, x, floor_plan, room_type):
     return loglik_bpd(model, x, floor_plan, room_type)
 
 
+def floor_loss(model, x, floor_plan, room_type):
+    """Compute the floor loss."""
+    return model.floor_loss(x, floor_plan, room_type).sum()
+
+
 def iwbo(model, x, k):
     x_stack = torch.cat([x for _ in range(k)], dim=0)
     ll_stack = model.log_prob(x_stack)

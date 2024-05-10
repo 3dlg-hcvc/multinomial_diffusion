@@ -358,6 +358,25 @@ class MultinomialDiffusion(torch.nn.Module):
         else:
             raise ValueError()
 
+    def floor_loss(self, x, floor_plan, room_type):
+        b, device = x.size(0), x.device
+        x_start = x
+        t, pt = self.sample_time(b, device, 'importance')
+        log_x_start = index_to_log_onehot(x_start, self.num_classes)
+
+        # Convert the log one hot results back to index
+        x_sample = log_onehot_to_index(self.q_sample(log_x_start=log_x_start, t=t))
+        # Calculate the floor loss
+        floor_sample = torch.where(x_sample != 0, 1, 0)
+        # Use IoU loss for floor plan
+        floor_loss = torch.tensor([0.0])
+        if torch.sum(floor_sample) != 0:
+            floor_loss = 1.0 - (torch.sum((floor_sample * floor_plan), dim=(1, 2, 3)) + 1e-6) / torch.sum(
+                (floor_sample + floor_plan), dim=(1, 2, 3))
+
+        return floor_loss
+
+
     def log_prob(self, x, floor_plan=None, room_type=None):
         b, device = x.size(0), x.device
         if self.training:
