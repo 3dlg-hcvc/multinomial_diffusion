@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+from torchvision.models import resnet18
 from einops import rearrange
 from inspect import isfunction
 
@@ -130,7 +131,30 @@ class LinearAttention(nn.Module):
         return self.to_out(out)
 
 
-# model
+class ResNet18(nn.Module):
+    def __init__(self, in_dim=1, out_dim=64):
+        super(ResNet18, self).__init__()
+        self._feature_extractor = resnet18(weights=None)
+
+        self._feature_extractor.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        self._feature_extractor.conv1 = torch.nn.Conv2d(
+            in_dim,
+            64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False
+        )
+
+        self._feature_extractor.fc = nn.Sequential(
+            nn.Linear(512, 512), nn.ReLU(),
+            nn.Linear(512, out_dim)
+        )
+
+        # Add a transposed convolution to convert the feature vector into a feature map
+        self.deconv = nn.ConvTranspose2d(out_dim, out_dim, kernel_size=120, stride=1)
+
+    def forward(self, X):
+        X = X.float()
+        out = self._feature_extractor(X)
+        return out
 
 class SegmentationUnet(nn.Module):
     def __init__(self, num_classes, dim, num_steps, dim_mults=(1, 2, 4, 8), groups=8, dropout=0.):
@@ -140,6 +164,7 @@ class SegmentationUnet(nn.Module):
 
         self.embedding = nn.Embedding(num_classes, dim)
         self.floorplan_embedding = nn.Embedding(2, dim)
+        self.floorplan_encoder = ResNet18(in_dim=1, out_dim=dim)
         self.room_type_embedding = nn.Embedding(3, dim)
         self.dim = dim
         self.num_classes = num_classes
@@ -204,6 +229,7 @@ class SegmentationUnet(nn.Module):
 
         if floor_plan is not None:
             floor_plan = self.floorplan_embedding(floor_plan)
+            # floor_plan = self.floorplan_encoder(floor_plan)
             x = x + floor_plan
 
         assert x.shape == (B, C, H, W, self.dim)
@@ -220,7 +246,8 @@ class SegmentationUnet(nn.Module):
             room_type = self.room_type_embedding(room_type)
             room_type = self.room_type_mlp(room_type)
             t += room_type
-
+        
+        import pdb; pdb.set_trace()
         h = []
 
         for resnet, resnet2, attn, downsample in self.downs:
