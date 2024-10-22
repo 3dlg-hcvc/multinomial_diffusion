@@ -163,7 +163,8 @@ class SegmentationUnet(nn.Module):
         in_out = list(zip(dims[:-1], dims[1:]))
 
         self.embedding = nn.Embedding(num_classes, dim)
-        self.floorplan_embedding = nn.Embedding(2, dim)
+        # self.floorplan_embedding = nn.Embedding(2, dim)
+        self.floorplan_embedding = nn.Embedding(4, dim)
         self.floorplan_encoder = ResNet18(in_dim=1, out_dim=dim)
         self.room_type_embedding = nn.Embedding(3, dim)
         self.dim = dim
@@ -247,7 +248,6 @@ class SegmentationUnet(nn.Module):
             room_type = self.room_type_mlp(room_type)
             t += room_type
         
-        import pdb; pdb.set_trace()
         h = []
 
         for resnet, resnet2, attn, downsample in self.downs:
