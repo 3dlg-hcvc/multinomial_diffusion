@@ -105,7 +105,11 @@ class Experiment(DiffusionExperiment):
             loss_sum = 0.0
             loss_count = 0
             for data in self.train_loader:
-                x, floor_plan, room_type = data
+                if self.args.text_condition:
+                    x, floor_plan, room_type, text_condition = data
+                    text_condition = text_condition.to(self.args.device)
+                else:
+                    x, floor_plan, room_type = data
                 floor_plan = (
                     floor_plan.to(self.args.device)
                     if torch.sum(floor_plan) != 0
@@ -117,9 +121,14 @@ class Experiment(DiffusionExperiment):
                     else None
                 )
                 # loss = elbo_bpd(self.model, x.to(self.args.device), floor_plan, room_type)
-                loss_elbo = elbo_bpd(
-                    self.model, x.to(self.args.device), floor_plan, room_type
-                )
+                if self.args.text_condition:
+                    loss_elbo = elbo_bpd(
+                        self.model, x.to(self.args.device), floor_plan, room_type, text_condition
+                    )
+                else:
+                    loss_elbo = elbo_bpd(
+                        self.model, x.to(self.args.device), floor_plan, room_type
+                    )
                 if self.args.floor_loss:
                     loss_floor = floor_loss(
                         self.model, x.to(self.args.device), floor_plan, room_type
