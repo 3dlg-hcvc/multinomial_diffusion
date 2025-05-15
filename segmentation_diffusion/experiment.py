@@ -22,7 +22,7 @@ class Experiment(DiffusionExperiment):
         loss_sum = 0.0
         loss_count = 0
         for data in self.train_loader:
-            if text_condition:
+            if self.args.text_condition:
                 x, floor_plan, room_type, text_condition = data
                 text_condition = text_condition.to(self.args.device)
             else:
@@ -34,7 +34,7 @@ class Experiment(DiffusionExperiment):
                 room_type.to(self.args.device) if torch.sum(room_type) >= 0 else None
             )
             self.optimizer.zero_grad()
-            if text_condition:
+            if self.args.text_condition:
                 loss_elbo = elbo_bpd(
                     self.model, x.to(self.args.device), floor_plan, room_type, text_condition
                 )
