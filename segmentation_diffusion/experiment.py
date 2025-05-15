@@ -17,11 +17,16 @@ def add_exp_args(parser):
 class Experiment(DiffusionExperiment):
 
     def train_fn(self, epoch):
+        text_condition = self.args.text_condition
         self.model.train()
         loss_sum = 0.0
         loss_count = 0
         for data in self.train_loader:
-            x, floor_plan, room_type = data
+            if text_condition:
+                x, floor_plan, room_type, text_condition = data
+                text_condition = text_condition.to(self.args.device)
+            else:
+                x, floor_plan, room_type = data
             floor_plan = (
                 floor_plan.to(self.args.device) if torch.sum(floor_plan) != 0 else None
             )
@@ -29,9 +34,14 @@ class Experiment(DiffusionExperiment):
                 room_type.to(self.args.device) if torch.sum(room_type) >= 0 else None
             )
             self.optimizer.zero_grad()
-            loss_elbo = elbo_bpd(
-                self.model, x.to(self.args.device), floor_plan, room_type
-            )
+            if text_condition:
+                loss_elbo = elbo_bpd(
+                    self.model, x.to(self.args.device), floor_plan, room_type, text_condition
+                )
+            else:
+                loss_elbo = elbo_bpd(
+                    self.model, x.to(self.args.device), floor_plan, room_type
+                )
             if self.args.floor_loss:
                 loss_floor = floor_loss(
                     self.model, x.to(self.args.device), floor_plan, room_type
