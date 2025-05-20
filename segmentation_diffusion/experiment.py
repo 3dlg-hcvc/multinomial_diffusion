@@ -376,7 +376,7 @@ class Experiment(DiffusionExperiment):
             # breakpoint()
             for i in range(self.args.num_samples):
                 # Get final generated sample (last timestep) and convert to RGB
-                final_sample = samples_chain[i][-1].unsqueeze(0)  # Add batch dimension
+                final_sample = samples_chain[i][0].unsqueeze(0)  # Add batch dimension
                 colored_samples, raw_layout = self.samples_process(final_sample, colormap)
                 
                 # Process floor plan for visualization if available
@@ -403,17 +403,16 @@ class Experiment(DiffusionExperiment):
                 if room_type is not None:
                     room_type_value = int(room_type[i].cpu().item())
                 
-                # breakpoint()
-                row = [
-                    wandb.Image(colored_samples[0].cpu().numpy()),  # Generated sample as RGB
-                    wandb.Image(floor_plan_img) if floor_plan_img is not None else None,  # Floor plan
-                    room_type_value,  # Room type as a number
-                ]
-                data.append(row)
+                # Store the components for batch logging
+                if i == 0:
+                    # Initialize a dictionary for all samples
+                    all_samples = {}
+                
+                # Add this sample's components to the dictionary in the desired order
+                all_samples[f"sample_{i}/1_room_type"] = room_type_value  # Room type first
+                all_samples[f"sample_{i}/2_floor_plan"] = wandb.Image(floor_plan_img) if floor_plan_img is not None else None  # Floor plan second
+                all_samples[f"sample_{i}/3_generated_layout"] = wandb.Image(colored_samples[0].cpu().numpy())  # Generated layout last
             
-            # Log the table to wandb
-            # breakpoint()
-            wandb.log({
-                "generated_samples": wandb.Table(data=data, columns=columns),
-                "epoch": epoch+1
-            })
+            # Log all samples in a single call
+            all_samples["epoch"] = epoch+1
+            wandb.log(all_samples)

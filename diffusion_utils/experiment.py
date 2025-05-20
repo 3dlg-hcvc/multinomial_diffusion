@@ -33,7 +33,7 @@ def add_exp_args(parser):
     parser.add_argument('--log_tb', type=eval, default=True)
     parser.add_argument('--log_wandb', type=eval, default=True)
     parser.add_argument('--log_home', type=str, default=None)
-    
+
     # Sample generation params
     parser.add_argument('--log_samples', type=eval, default=False)
     parser.add_argument('--num_samples', type=int, default=5)
