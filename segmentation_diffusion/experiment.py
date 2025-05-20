@@ -414,6 +414,5 @@ class Experiment(DiffusionExperiment):
             # Log the table to wandb
             # breakpoint()
             wandb.log({
-                "generated_samples": wandb.Table(data=data, columns=columns),
-                "epoch": epoch + 1
-            })
+                "generated_samples": wandb.Table(data=data, columns=columns)
+            }, step=epoch+1)  # Explicitly set the step parameter
