@@ -365,8 +365,8 @@ class Experiment(DiffusionExperiment):
             samples_chain = samples_chain.permute(1, 0, 2, 3, 4)
             
             # Load the color mapping
-            color_palette_path = '/localhome/xsa55/Xiaohao/SemDiffLayout/preprocess/scripts/config/color_palette.json'
-            idx_to_label_path = '/localhome/xsa55/Xiaohao/SemDiffLayout/preprocess/scripts/config/unified_idx_to_generic_label.json'
+            color_palette_path = '/localhome/xsa55/Xiaohao/SemDiffLayout/preprocess/metadata/color_palette.json'
+            idx_to_label_path = '/localhome/xsa55/Xiaohao/SemDiffLayout/preprocess/metadata/unified_idx_to_generic_label.json'
             colormap = self.assign_color_rgb(color_palette_path, idx_to_label_path)
             
             # Create a wandb table for the samples
