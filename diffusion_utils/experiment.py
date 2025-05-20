@@ -33,14 +33,20 @@ def add_exp_args(parser):
     parser.add_argument('--log_tb', type=eval, default=True)
     parser.add_argument('--log_wandb', type=eval, default=True)
     parser.add_argument('--log_home', type=str, default=None)
+    
+    # Sample generation params
+    parser.add_argument('--log_samples', type=eval, default=False)
+    parser.add_argument('--num_samples', type=int, default=5)
+    parser.add_argument('--sample_every', type=int, default=1)  # Generate samples every N epochs
 
 
 class DiffusionExperiment(BaseExperiment):
     no_log_keys = ['project', 'name',
                    'log_tb', 'log_wandb',
                    'check_every', 'eval_every',
-                   'device', 'parallel'
-                   'pin_memory', 'num_workers']
+                   'device', 'parallel',
+                   'pin_memory', 'num_workers',
+                   'log_samples', 'num_samples', 'sample_every']
 
     def __init__(self, args,
                  data_id, model_id, optim_id,
@@ -97,6 +103,12 @@ class DiffusionExperiment(BaseExperiment):
         if args.log_wandb:
             wandb.init(config=args_dict, project=args.project, id=args.name, dir=self.log_path, settings=wandb.Settings(start_method="fork"))
 
+    def log_samples_fn(self, epoch):
+        """Generate and log samples to wandb.
+        This method should be implemented by child classes to handle specific sample generation.
+        """
+        raise NotImplementedError("Child classes must implement log_samples_fn")
+
     def log_fn(self, epoch, train_dict, eval_dict):
 
         # Tensorboard
@@ -114,6 +126,10 @@ class DiffusionExperiment(BaseExperiment):
             if eval_dict:
                 for metric_name, metric_value in eval_dict.items():
                     wandb.log({'eval/{}'.format(metric_name): metric_value}, step=epoch+1)
+            
+            # Log samples if enabled and it's time to log
+            if self.args.log_samples and (epoch + 1) % self.args.sample_every == 0:
+                self.log_samples_fn(epoch)
 
     def resume(self):
         resume_path = os.path.join(self.log_base, self.data_id, self.model_id, self.optim_id, self.args.resume, 'check')
